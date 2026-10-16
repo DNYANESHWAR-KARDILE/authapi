@@ -29,8 +29,9 @@ const getCookieOptions = () => {
   return {
     httpOnly: true, // Prevents client-side JS from accessing the cookie
     secure: isProduction, // Only sent over HTTPS in production
-    sameSite: isProduction ? 'none' : 'lax', // CSRF protection
+    sameSite: isProduction ? 'none' : 'lax', // 'none' required for cross-domain cookie on HTTPS
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
+    path: '/',
   };
 };
 
@@ -391,6 +392,7 @@ const login = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Welcome back! Signed in successfully.',
+      token,
       user: {
         id: user._id,
         name: user.name,
@@ -444,6 +446,7 @@ const logout = async (req, res) => {
       httpOnly: true,
       secure: isProduction,
       sameSite: isProduction ? 'none' : 'lax',
+      path: '/',
     });
 
     return res.status(200).json({

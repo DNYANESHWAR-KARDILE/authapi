@@ -9,8 +9,13 @@ const User = require('../models/User');
  */
 const requireAuth = async (req, res, next) => {
   try {
-    // 1. Read token from HttpOnly cookie
-    const token = req.cookies?.token;
+    // 1. Read token from HttpOnly cookie or Authorization Bearer header
+    const authHeader = req.headers.authorization;
+    const bearerToken =
+      authHeader && authHeader.startsWith('Bearer ')
+        ? authHeader.slice(7)
+        : null;
+    const token = req.cookies?.token || bearerToken;
 
     if (!token) {
       return res.status(401).json({

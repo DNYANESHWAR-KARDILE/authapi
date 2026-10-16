@@ -25,7 +25,33 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    checkAuth();
+    let isMounted = true;
+    const verifyUser = async () => {
+      try {
+        const response = await getAuthProfile();
+        if (isMounted) {
+          if (response.data && response.data.user) {
+            setUser(response.data.user);
+          } else {
+            setUser(null);
+          }
+        }
+      } catch {
+        if (isMounted) {
+          setUser(null);
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    verifyUser();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const logout = async () => {

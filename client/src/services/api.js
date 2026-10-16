@@ -1,12 +1,20 @@
 import axios from 'axios';
 
 /**
- * Axios instance configured for our Express backend.
- * withCredentials: true ensures that HttpOnly cookies (containing JWT)
- * are automatically sent with every cross-origin request.
+ * Centralized API configuration.
+ * Reads backend URL from VITE_API_URL with local fallback.
+ * Ensures proper '/api' suffix regardless of trailing slash format.
+ */
+const rawBase = (import.meta.env.VITE_API_URL || 'http://localhost:5000').trim().replace(/\/+$/, '');
+export const API_BASE_URL = rawBase.endsWith('/api') ? rawBase : `${rawBase}/api`;
+
+/**
+ * Axios instance configured for cross-origin authentication.
+ * withCredentials: true ensures HttpOnly cookies are transmitted
+ * across origins (e.g. Vercel frontend to Railway backend).
  */
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: API_BASE_URL,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',

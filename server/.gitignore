@@ -1,2 +1,17 @@
+# Dependencies
 node_modules/
+
+# Environment and sensitive credential files
 .env
+.env.*
+!.env.example
+
+# Runtime logs
+logs/
+*.log
+npm-debug.log*
+
+# System and editor files
+.DS_Store
+.vscode/
+.idea/
