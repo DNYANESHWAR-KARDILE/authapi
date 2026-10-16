@@ -1,0 +1,32 @@
+# Exclude frontend code from backend Docker context
+client/
+
+# Exclude dependencies (will be cleanly installed inside container)
+node_modules/
+**/node_modules/
+
+# Exclude sensitive environment variables and secrets
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# Exclude build artifacts and logs
+dist/
+**/dist/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Exclude Git files
+.git/
+.gitignore
+
+# Exclude system and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
