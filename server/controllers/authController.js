@@ -25,7 +25,7 @@ const isDatabaseConnected = (res) => {
  * HttpOnly protects against XSS token theft.
  */
 const getCookieOptions = () => {
-  const isProduction = process.env.NODE_ENV === 'production';
+  const isProduction = process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER);
   return {
     httpOnly: true, // Prevents client-side JS from accessing the cookie
     secure: isProduction, // Only sent over HTTPS in production
@@ -440,7 +440,7 @@ const getMe = async (req, res) => {
  */
 const logout = async (req, res) => {
   try {
-    const isProduction = process.env.NODE_ENV === 'production';
+    const isProduction = process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER);
 
     res.clearCookie('token', {
       httpOnly: true,

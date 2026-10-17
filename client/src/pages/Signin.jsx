@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { loginUser } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -6,7 +6,14 @@ import { useAuth } from '../context/AuthContext';
 const Signin = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { setUser } = useAuth();
+  const { user, login, setUser } = useAuth();
+
+  // If user is already authenticated, redirect to home
+  useEffect(() => {
+    if (user) {
+      navigate('/', { replace: true });
+    }
+  }, [user, navigate]);
 
   const [formData, setFormData] = useState({
     email: location.state?.email || '',
@@ -47,9 +54,13 @@ const Signin = () => {
         password,
       });
 
-      // Update global auth context
+      // Update global auth context and save Bearer token for cross-origin reliability
       if (res.data?.user) {
-        setUser(res.data.user);
+        if (login) {
+          login(res.data.user, res.data.token);
+        } else {
+          setUser(res.data.user);
+        }
       }
 
       // Navigate to protected home dashboard

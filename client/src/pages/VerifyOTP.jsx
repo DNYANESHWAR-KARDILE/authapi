@@ -1,10 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { verifyOtpCode, resendOtpCode } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const VerifyOTP = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (user) {
+      navigate('/', { replace: true });
+    }
+  }, [user, navigate]);
 
   // If email was passed from Signup, use it; otherwise allow manual entry
   const [email, setEmail] = useState(location.state?.email || '');

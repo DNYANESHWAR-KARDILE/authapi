@@ -40,7 +40,7 @@ const rawClientUrls = process.env.CLIENT_URL
   ? process.env.CLIENT_URL.split(',').map((url) => url.trim().replace(/\/+$/, ''))
   : ['http://localhost:5173', 'http://localhost:3000'];
 
-const isProduction = process.env.NODE_ENV === 'production';
+const isProduction = process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER);
 
 app.use(
   cors({
@@ -55,13 +55,18 @@ app.use(
         return callback(null, true);
       }
 
+      // Allow Vercel deployment origins (production domain and preview branch deployments)
+      if (/^https:\/\/[a-zA-Z0-9_.-]+\.vercel\.app$/.test(normalizedOrigin)) {
+        return callback(null, true);
+      }
+
       // In non-production, permit any localhost origin
       if (!isProduction && /^https?:\/\/localhost(:\d+)?$/.test(normalizedOrigin)) {
         return callback(null, true);
       }
 
       console.warn(`[CORS] Blocked request from unauthorized origin: ${origin}`);
-      return callback(new Error(`CORS policy does not allow access from origin ${origin}`));
+      return callback(null, false);
     },
     credentials: true, // Necessary for HttpOnly cookies across origins
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
