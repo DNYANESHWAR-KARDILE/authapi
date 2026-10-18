@@ -1,11 +1,10 @@
+
 import axios from 'axios';
 
 const TOKEN_KEY = 'auth_token';
 
 /**
- * Token storage helpers.
- * Manages JWT in localStorage to support cross-origin Bearer token authentication
- * alongside HttpOnly cookies, ensuring reliability across third-party cookie restrictions.
+ * JWT Token Storage Helpers
  */
 export const getStoredToken = () => {
   try {
@@ -23,7 +22,7 @@ export const setStoredToken = (token) => {
       localStorage.removeItem(TOKEN_KEY);
     }
   } catch {
-    // Gracefully ignore local storage restrictions (e.g. strict sandboxing)
+    // Ignore localStorage restrictions
   }
 };
 
@@ -31,40 +30,44 @@ export const removeStoredToken = () => {
   try {
     localStorage.removeItem(TOKEN_KEY);
   } catch {
-    // Gracefully ignore
+    // Ignore localStorage restrictions
   }
 };
 
 /**
- * Centralized API base URL resolver.
- * - Reads VITE_API_URL (configurable for production).
- * - Safe development fallback to localhost:5000 in dev mode.
- * - Safe production fallback to Render backend if unset.
- * - Normalizes trailing slashes and prevents duplicated /api or /auth segments.
+ * API Base URL Resolver
+ *
+ * VITE_API_URL should contain the backend URL.
+ * Example: https://your-backend.onrender.com
  */
 const resolveBaseUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL;
-  let raw = (envUrl && typeof envUrl === 'string' && envUrl.trim()) || '';
+
+  let raw =
+    typeof envUrl === 'string' && envUrl.trim()
+      ? envUrl.trim()
+      : '';
 
   if (!raw) {
-    raw = import.meta.env.DEV ? 'http://localhost:5000' : 'https://authapi-j30c.onrender.com';
+    raw = 'https://authapi-j30c.onrender.com';
   }
 
-  // Strip trailing slashes
-  raw = raw.trim().replace(/\/+$/, '');
+  // Remove trailing slashes
+  raw = raw.replace(/\/+$/, '');
 
-  // Prevent accidental duplicated /api/auth or /auth
-  raw = raw.replace(/\/api\/auth\/?$/, '').replace(/\/auth\/?$/, '');
+  // Remove accidental /api/auth or /auth suffix
+  raw = raw
+    .replace(/\/api\/auth$/i, '')
+    .replace(/\/auth$/i, '');
 
-  // Ensure clean single /api suffix
+  // Add /api only once
   return raw.endsWith('/api') ? raw : `${raw}/api`;
 };
 
 export const API_BASE_URL = resolveBaseUrl();
 
 /**
- * Axios instance configured for cross-origin authentication.
- * withCredentials: true ensures HttpOnly cookies are transmitted across origins.
+ * Axios Instance
  */
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -74,37 +77,79 @@ const api = axios.create({
   },
 });
 
-// Request interceptor: attach Bearer token if available in storage
+/**
+ * Request Interceptor
+ * Attach JWT Bearer token when available.
+ */
 api.interceptors.request.use(
   (config) => {
     const token = getStoredToken();
+
     if (token) {
+      config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
     }
+
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// Response interceptor: automatically clear token if 401 Unauthorized occurs on protected call
+/**
+ * Response Interceptor
+ * Remove invalid token on 401 responses.
+ *
+ * Do not automatically redirect here.
+ * Login/signup/OTP endpoints may also return 401.
+ */
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Clear invalid or expired credentials
+    if (
+      error.response?.status === 401 &&
+      !error.config?.url?.includes('/auth/login') &&
+      !error.config?.url?.includes('/auth/signup') &&
+      !error.config?.url?.includes('/auth/verify-otp') &&
+      !error.config?.url?.includes('/auth/resend-otp')
+    ) {
       removeStoredToken();
     }
+
     return Promise.reject(error);
   }
 );
 
-// Authentication API functions
-export const signupUser = (data) => api.post('/auth/signup', data);
-export const verifyOtpCode = (data) => api.post('/auth/verify-otp', data);
-export const resendOtpCode = (data) => api.post('/auth/resend-otp', data);
-export const loginUser = (data) => api.post('/auth/login', data);
-export const getAuthProfile = () => api.get('/auth/me');
-export const logoutUser = () => api.post('/auth/logout');
+/**
+ * Authentication APIs
+ */
+
+// Register user
+export const signupUser = (data) =>
+  api.post('/auth/signup', data);
+
+// Verify OTP
+export const verifyOtpCode = (data) =>
+  api.post('/auth/verify-otp', data);
+
+// Resend OTP
+export const resendOtpCode = (data) =>
+  api.post('/auth/resend-otp', data);
+
+// Login user
+export const loginUser = (data) =>
+  api.post('/auth/login', data);
+
+// Get logged-in user's profile
+export const getAuthProfile = () =>
+  api.get('/auth/me');
+
+// Logout user
+export const logoutUser = async () => {
+  try {
+    return await api.post('/auth/logout');
+  } finally {
+    removeStoredToken();
+  }
+};
 
 export default api;
-

@@ -1,94 +1,152 @@
+
 const path = require('path');
-// Load environment variables from server/.env if present, then cwd
-require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+
+// Load environment variables
+require('dotenv').config({
+  path: path.resolve(__dirname, '.env'),
+});
 require('dotenv').config();
 
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
+
 const authRoutes = require('./routes/authRoutes');
-
-// 1. Validate required environment variables at startup
-const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET'];
-const missingVars = requiredEnvVars.filter((key) => !process.env[key]);
-
-if (missingVars.length > 0) {
-  console.error(
-    `[Startup Warning] Missing critical environment variables: ${missingVars.join(', ')}`
-  );
-  if (process.env.NODE_ENV === 'production') {
-    console.error('[Startup Warning] Please configure these environment variables in your deployment settings.');
-  }
-}
-
-if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-  console.warn(
-    '[Startup Warning] EMAIL_USER or EMAIL_PASS is not configured. Email OTP delivery will fail until configured.'
-  );
-}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Trust reverse proxy (Railway, Vercel, load balancers)
-// Essential for secure cookies (req.secure) and accurate client IP in express-rate-limit
+// Trust proxy for Render / Railway
 app.set('trust proxy', 1);
 
-// 2. Dynamic CORS configuration for production and local development
-const rawClientUrls = process.env.CLIENT_URL
-  ? process.env.CLIENT_URL.split(',').map((url) => url.trim().replace(/\/+$/, ''))
-  : ['http://localhost:5173', 'http://localhost:3000'];
+// --------------------------------------------------
+// ENVIRONMENT VARIABLES
+// --------------------------------------------------
 
-const isProduction = process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER);
+const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET'];
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (such as mobile apps, curl, server-to-server, or same-origin)
-      if (!origin) return callback(null, true);
-
-      const normalizedOrigin = origin.replace(/\/+$/, '');
-
-      // Check configured client origins
-      if (rawClientUrls.includes(normalizedOrigin)) {
-        return callback(null, true);
-      }
-
-      // Allow Vercel deployment origins (production domain and preview branch deployments)
-      if (/^https:\/\/[a-zA-Z0-9_.-]+\.vercel\.app$/.test(normalizedOrigin)) {
-        return callback(null, true);
-      }
-
-      // In non-production, permit any localhost origin
-      if (!isProduction && /^https?:\/\/localhost(:\d+)?$/.test(normalizedOrigin)) {
-        return callback(null, true);
-      }
-
-      console.warn(`[CORS] Blocked request from unauthorized origin: ${origin}`);
-      return callback(null, false);
-    },
-    credentials: true, // Necessary for HttpOnly cookies across origins
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  })
+const missingVars = requiredEnvVars.filter(
+  (key) => !process.env[key]
 );
 
-// 3. Middlewares
+if (missingVars.length > 0) {
+  console.error(
+    `[Startup Warning] Missing environment variables: ${missingVars.join(', ')}`
+  );
+}
+
+if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+  console.warn(
+    '[Startup Warning] EMAIL_USER or EMAIL_PASS is missing. Email OTP may fail.'
+  );
+}
+
+// --------------------------------------------------
+// CORS CONFIGURATION
+// --------------------------------------------------
+
+const defaultOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:3000',
+];
+
+const envOrigins = process.env.CLIENT_URL
+  ? process.env.CLIENT_URL
+      .split(',')
+      .map((url) => url.trim().replace(/\/+$/, ''))
+      .filter(Boolean)
+  : [];
+
+const allowedOrigins = [
+  ...new Set([...defaultOrigins, ...envOrigins]),
+];
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests without an Origin header
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    const normalizedOrigin = origin.replace(/\/+$/, '');
+
+    // Allow explicitly configured origins
+    if (allowedOrigins.includes(normalizedOrigin)) {
+      return callback(null, true);
+    }
+
+    // Allow standard Vercel deployment domains
+    const isVercelOrigin =
+      /^https:\/\/[a-zA-Z0-9_-]+\.vercel\.app$/.test(
+        normalizedOrigin
+      );
+
+    if (isVercelOrigin) {
+      return callback(null, true);
+    }
+
+    console.warn(`[CORS] Blocked origin: ${origin}`);
+
+    return callback(new Error('Not allowed by CORS'));
+  },
+
+  credentials: true,
+
+  methods: [
+    'GET',
+    'POST',
+    'PUT',
+    'PATCH',
+    'DELETE',
+    'OPTIONS',
+  ],
+
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+  ],
+
+  optionsSuccessStatus: 204,
+};
+
+// CORS must run before all API routes
+app.use(cors(corsOptions));
+
+// Explicitly handle OPTIONS preflight requests
+app.options(/.*/, cors(corsOptions));
+
+// --------------------------------------------------
+// MIDDLEWARES
+// --------------------------------------------------
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// 4. API Routes
-app.use('/api/auth', authRoutes);
+// --------------------------------------------------
+// ROOT ROUTE
+// --------------------------------------------------
 
-// 5. Health Check Endpoints (Railway uses GET /health)
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Authentication API is running',
+  });
+});
+
+// --------------------------------------------------
+// HEALTH CHECK
+// --------------------------------------------------
+
 const getHealthStatus = (req, res) => {
   const isDbReady = mongoose.connection.readyState === 1;
-  const status = isDbReady ? 'ok' : 'degraded';
 
   res.status(200).json({
-    status,
+    success: true,
+    status: isDbReady ? 'ok' : 'degraded',
     service: 'backend',
     database: isDbReady ? 'connected' : 'disconnected',
     uptime: Math.floor(process.uptime()),
@@ -99,7 +157,16 @@ const getHealthStatus = (req, res) => {
 app.get('/health', getHealthStatus);
 app.get('/api/health', getHealthStatus);
 
-// 6. Global 404 Handler
+// --------------------------------------------------
+// AUTHENTICATION ROUTES
+// --------------------------------------------------
+
+app.use('/api/auth', authRoutes);
+
+// --------------------------------------------------
+// 404 HANDLER
+// --------------------------------------------------
+
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -107,11 +174,21 @@ app.use((req, res) => {
   });
 });
 
-// 7. Global Error Handler (Sanitizes stack traces for safety)
+// --------------------------------------------------
+// GLOBAL ERROR HANDLER
+// --------------------------------------------------
+
 app.use((err, req, res, next) => {
-  console.error('[Unhandled Error]:', err.message || err);
-  const status = err.status || 500;
-  res.status(status).json({
+  console.error('[Server Error]', err.message || err);
+
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({
+      success: false,
+      message: 'Origin not allowed by CORS',
+    });
+  }
+
+  return res.status(err.status || 500).json({
     success: false,
     message:
       process.env.NODE_ENV === 'production'
@@ -120,32 +197,32 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 8. Connect to MongoDB and start the server
-// Listen on 0.0.0.0 so Railway / container ingress can reach the process
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[Server] Express listening on port ${PORT} (0.0.0.0)`);
-  console.log(`[CORS] Allowed origins: ${rawClientUrls.join(', ')}`);
-});
+// --------------------------------------------------
+// DATABASE CONNECTION & SERVER START
+// --------------------------------------------------
 
-const mongoUri = process.env.MONGODB_URI;
+async function startServer() {
+  try {
+    if (!process.env.MONGODB_URI) {
+      throw new Error('MONGODB_URI is not configured');
+    }
 
-if (mongoUri) {
-  mongoose
-    .connect(mongoUri, {
-      serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of hanging 30s
-    })
-    .then(() => {
-      const host = mongoose.connection.host || 'cluster';
-      console.log(`[Database] MongoDB connected successfully to host: ${host}`);
-    })
-    .catch((error) => {
-      console.error(`[Database Error] Could not connect to MongoDB: ${error.message}`);
-      console.log(
-        '[Notice] Check your MONGODB_URI (e.g. MongoDB Atlas) and ensure Network Access (IP Whitelist) allows connection.'
-      );
+    await mongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 10000,
     });
-} else {
-  console.warn('[Database Notice] MONGODB_URI is not set. Database operations will be unavailable.');
+
+    console.log('[Database] MongoDB connected successfully');
+
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`[Server] Running on port ${PORT}`);
+      console.log('[CORS] Allowed origins:', allowedOrigins);
+    });
+  } catch (error) {
+    console.error('[Startup Error]', error.message);
+    process.exit(1);
+  }
 }
+
+startServer();
 
 module.exports = app;
