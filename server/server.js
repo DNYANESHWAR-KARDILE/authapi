@@ -36,15 +36,12 @@ if (missingVars.length > 0) {
   );
 }
 
-if (
-  !process.env.BREVO_API_KEY &&
-  !process.env.RESEND_API_KEY &&
-  (!process.env.EMAIL_USER || !process.env.EMAIL_PASS)
-) {
+if (!process.env.BREVO_API_KEY || !process.env.BREVO_SENDER_EMAIL) {
   console.warn(
-    '[Startup Warning] No email service configured. For Render/production set BREVO_API_KEY or RESEND_API_KEY. For local development set EMAIL_USER and EMAIL_PASS.'
+    '[Startup Warning] BREVO_API_KEY or BREVO_SENDER_EMAIL is missing. Email OTP delivery will fail.'
   );
 }
+
 
 // --------------------------------------------------
 // CORS CONFIGURATION

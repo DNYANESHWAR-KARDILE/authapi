@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const { generateOTP, sendOTPEmail } = require('../utils/sendOTP');
+const { generateOTP, sendOtpEmail } = require('../utils/emailService');
 
 /**
  * Checks if MongoDB is currently connected.
@@ -101,13 +101,12 @@ const signup = async (req, res) => {
     // 7. Attempt to send OTP email BEFORE finalizing user creation
     // If sending fails, we don't mislead the user
     try {
-      await sendOTPEmail(normalizedEmail, otp);
+      await sendOtpEmail(normalizedEmail, otp);
     } catch (emailError) {
+      console.error('[Signup Error] Failed to send OTP verification email');
       return res.status(500).json({
         success: false,
-        message:
-          emailError.message ||
-          'Failed to send OTP verification email. Please verify email credentials in server/.env.',
+        message: 'Failed to send OTP verification email. Please try again later.',
       });
     }
 
@@ -304,11 +303,12 @@ const resendOTP = async (req, res) => {
 
     // Send email
     try {
-      await sendOTPEmail(normalizedEmail, newOtp);
+      await sendOtpEmail(normalizedEmail, newOtp);
     } catch (emailError) {
+      console.error('[Resend OTP Error] Failed to send OTP verification email');
       return res.status(500).json({
         success: false,
-        message: emailError.message || 'Failed to send OTP email.',
+        message: 'Failed to send OTP verification email. Please try again later.',
       });
     }
 
