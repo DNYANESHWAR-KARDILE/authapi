@@ -36,9 +36,13 @@ if (missingVars.length > 0) {
   );
 }
 
-if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+if (
+  !process.env.BREVO_API_KEY &&
+  !process.env.RESEND_API_KEY &&
+  (!process.env.EMAIL_USER || !process.env.EMAIL_PASS)
+) {
   console.warn(
-    '[Startup Warning] EMAIL_USER or EMAIL_PASS is missing. Email OTP may fail.'
+    '[Startup Warning] No email service configured. For Render/production set BREVO_API_KEY or RESEND_API_KEY. For local development set EMAIL_USER and EMAIL_PASS.'
   );
 }
 
